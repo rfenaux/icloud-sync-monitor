@@ -48,6 +48,17 @@ cached_data: dict = {}
 last_quota_fetch: Optional[datetime] = None
 
 
+def fetch_and_cache_quota() -> dict:
+    """Fetch quota and update cache. Returns quota dict."""
+    global last_quota_fetch, cached_data
+    quota = brctl_runner.get_quota()
+    if quota:
+        cached_data["quota"] = quota
+        last_quota_fetch = datetime.now()
+        return quota
+    return cached_data.get("quota", {"remaining_bytes": None, "remaining_human": "Unknown"})
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     """HTTP request handler for dashboard and API."""
 
@@ -187,12 +198,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if "quota" in cached_data:
                 return cached_data["quota"]
 
-        quota = brctl_runner.get_quota()
-        if quota:
-            cached_data["quota"] = quota
-            last_quota_fetch = now
-            return quota
-        return cached_data.get("quota", {"remaining_bytes": None, "remaining_human": "Unknown"})
+        return fetch_and_cache_quota()
 
     def _get_containers(self) -> dict:
         """Get container status."""
@@ -219,7 +225,7 @@ async def websocket_handler(websocket):
     try:
         # Send initial state
         status = sqlite_reader.get_summary()
-        status["quota"] = brctl_runner.get_quota() or {}
+        status["quota"] = fetch_and_cache_quota()
         await websocket.send(json.dumps({"event": "sync_update", "data": status}))
 
         # Keep connection alive and handle incoming messages
@@ -240,11 +246,18 @@ async def websocket_handler(websocket):
 
 async def broadcast_updates():
     """Periodically broadcast updates to all connected WebSocket clients."""
+    # Refresh quota every 5 minutes during broadcasts
+    quota_refresh_counter = 0
     while True:
         await asyncio.sleep(WS_PUSH_INTERVAL)
         if connected_websockets:
             status = sqlite_reader.get_summary()
-            status["quota"] = cached_data.get("quota", {})
+            # Refresh quota every 60 broadcasts (5 min at 5s interval)
+            quota_refresh_counter += 1
+            if quota_refresh_counter >= 60 or "quota" not in cached_data:
+                fetch_and_cache_quota()
+                quota_refresh_counter = 0
+            status["quota"] = cached_data.get("quota", {"remaining_bytes": None, "remaining_human": "Unknown"})
             message = json.dumps({"event": "sync_update", "data": status})
             await asyncio.gather(
                 *[ws.send(message) for ws in connected_websockets],
@@ -288,6 +301,11 @@ def main():
         logger.error(f"CloudDocs database not found: {CLOUDDOCS_DB}")
         logger.error("Make sure iCloud Drive is enabled and has synced at least once.")
         sys.exit(1)
+
+    # Initialize quota cache on startup
+    logger.info("Fetching initial quota...")
+    quota = fetch_and_cache_quota()
+    logger.info(f"Quota: {quota.get('remaining_human', 'Unknown')}")
 
     # Handle shutdown gracefully
     def shutdown(signum, frame):
