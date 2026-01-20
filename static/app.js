@@ -1,7 +1,8 @@
 /**
  * iCloud Sync Monitor - Enhanced Dashboard JavaScript
  * Features: Animated counters, live timestamps, sparklines, file icons,
- * favicon badges, notifications, activity feed, speed indicator
+ * favicon badges, notifications, activity feed, speed indicator,
+ * dark mode, stuck file detection, health score, containers
  */
 
 const API_BASE = '';
@@ -20,6 +21,7 @@ let lastBytesDown = 0;
 let lastBytesUp = 0;
 let isSyncing = false;
 let notificationsEnabled = false;
+let lastErrorCount = 0;
 
 // Sparkline data (last 60 data points = 5 minutes at 5s intervals)
 const sparklineData = {
@@ -32,6 +34,25 @@ const MAX_SPARKLINE_POINTS = 60;
 // Activity feed (last 20 items)
 const activityFeed = [];
 const MAX_ACTIVITY_ITEMS = 20;
+
+// Stuck file tracking (persisted in localStorage)
+const STUCK_THRESHOLD_MINUTES = 10;
+const STUCK_SEVERE_MINUTES = 30;
+let fileFirstSeen = JSON.parse(localStorage.getItem('fileFirstSeen') || '{}');
+let stuckFiles = [];
+let dismissedStuckFiles = JSON.parse(localStorage.getItem('dismissedStuckFiles') || '{}');
+
+// Container icons mapping
+const CONTAINER_ICONS = {
+    'com.apple.CloudDocs': { name: 'iCloud Drive', icon: '📁' },
+    'com.apple.photos.cloud': { name: 'Photos', icon: '📷' },
+    'com.apple.Notes': { name: 'Notes', icon: '📝' },
+    'com.apple.reminders': { name: 'Reminders', icon: '✓' },
+    'com.apple.Safari': { name: 'Safari', icon: '🧭' },
+    'com.apple.mail': { name: 'Mail', icon: '✉️' },
+    'com.apple.Preview': { name: 'Preview', icon: '🖼️' },
+    'com.apple.TextEdit': { name: 'TextEdit', icon: '📄' },
+};
 
 // DOM Elements
 const elements = {
@@ -58,6 +79,16 @@ const elements = {
     sparklineDownloads: document.getElementById('sparkline-downloads'),
     sparklineUploads: document.getElementById('sparkline-uploads'),
     sparklineErrors: document.getElementById('sparkline-errors'),
+    // New Phase 3 elements
+    themeToggle: document.getElementById('theme-toggle'),
+    themeIcon: document.getElementById('theme-icon'),
+    healthScore: document.getElementById('health-score'),
+    healthScoreValue: document.getElementById('health-score-value'),
+    stuckAlert: document.getElementById('stuck-alert'),
+    stuckAlertTitle: document.getElementById('stuck-alert-title'),
+    stuckAlertSubtitle: document.getElementById('stuck-alert-subtitle'),
+    stuckFilesList: document.getElementById('stuck-files-list'),
+    containersGrid: document.getElementById('containers-grid'),
 };
 
 // File type icons (SVG inline)
@@ -87,10 +118,13 @@ const FILE_EXTENSIONS = {
 // ==================== INITIALIZATION ====================
 
 document.addEventListener('DOMContentLoaded', () => {
+    initDarkMode();
     fetchInitialData();
+    fetchContainers();
     connectWebSocket();
     startTimestampTicker();
     requestNotificationPermission();
+    cleanupOldStuckTracking();
 
     // Initialize sparklines
     drawSparkline(elements.sparklineDownloads, [], '#4da8da');
@@ -192,6 +226,7 @@ function updateStatusCards(data) {
 
     lastDownloads = downloadsActive;
     lastUploads = uploadsActive;
+    lastErrorCount = errorsCount;
 
     // Update totals
     elements.downloadsTotal.textContent = data.downloads?.total
@@ -221,6 +256,9 @@ function updateStatusCards(data) {
 
     // Update favicon badge
     updateFaviconBadge(downloadsActive + uploadsActive, errorsCount > 0);
+
+    // Update health score
+    updateHealthScore(data);
 }
 
 function updateSyncingState() {
@@ -317,6 +355,9 @@ function updateTransfersList(downloads, uploads) {
         ...downloads.map(d => ({ ...d, type: 'download' })),
         ...uploads.map(u => ({ ...u, type: 'upload' })),
     ];
+
+    // Check for stuck files
+    checkStuckFiles(items);
 
     if (items.length === 0) {
         elements.transfersList.innerHTML = '<div class="empty-state">No active transfers</div>';
@@ -715,3 +756,296 @@ setInterval(() => {
 setInterval(() => {
     renderActivityFeed();
 }, 30000);
+
+// Refresh containers every minute
+setInterval(() => {
+    fetchContainers();
+}, 60000);
+
+// ==================== DARK MODE ====================
+
+function initDarkMode() {
+    // Check localStorage first
+    const savedMode = localStorage.getItem('darkMode');
+
+    if (savedMode !== null) {
+        // User has set a preference
+        if (savedMode === 'true') {
+            document.body.classList.add('dark-mode');
+            updateThemeIcon(true);
+        } else {
+            document.body.classList.remove('dark-mode');
+            updateThemeIcon(false);
+        }
+    } else {
+        // Respect system preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+            document.body.classList.add('dark-mode');
+        }
+        updateThemeIcon(prefersDark);
+    }
+
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (localStorage.getItem('darkMode') === null) {
+            document.body.classList.toggle('dark-mode', e.matches);
+            updateThemeIcon(e.matches);
+        }
+    });
+}
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', isDark);
+    updateThemeIcon(isDark);
+}
+
+function updateThemeIcon(isDark) {
+    if (elements.themeIcon) {
+        elements.themeIcon.textContent = isDark ? '☀️' : '🌙';
+    }
+}
+
+// ==================== HEALTH SCORE ====================
+
+function calculateHealthScore(data) {
+    let score = 100;
+
+    // Deduct for errors (5 points each, max 30)
+    const errorCount = data.errors?.count || 0;
+    score -= Math.min(30, errorCount * 5);
+
+    // Deduct for stuck files (10 points each, max 40)
+    score -= Math.min(40, stuckFiles.length * 10);
+
+    // Deduct for queue depth (0.1 per file in queue, max 20)
+    const queueDepth = (data.downloads?.total || 0) + (data.uploads?.total || 0);
+    score -= Math.min(20, queueDepth * 0.1);
+
+    // Deduct for severe stuck files (extra 5 points each)
+    const severeStuck = stuckFiles.filter(f => f.minutes >= STUCK_SEVERE_MINUTES).length;
+    score -= severeStuck * 5;
+
+    return Math.max(0, Math.round(score));
+}
+
+function updateHealthScore(data) {
+    const score = calculateHealthScore(data);
+
+    if (elements.healthScoreValue) {
+        elements.healthScoreValue.textContent = score;
+    }
+
+    if (elements.healthScore) {
+        elements.healthScore.classList.remove('good', 'warning', 'critical');
+        if (score >= 80) {
+            elements.healthScore.classList.add('good');
+        } else if (score >= 50) {
+            elements.healthScore.classList.add('warning');
+        } else {
+            elements.healthScore.classList.add('critical');
+        }
+    }
+}
+
+// ==================== STUCK FILE DETECTION ====================
+
+function checkStuckFiles(transfers) {
+    const now = Date.now();
+    const newStuckFiles = [];
+    const currentPaths = new Set();
+
+    transfers.forEach(t => {
+        const path = t.path || t.filename;
+        if (!path) return;
+
+        currentPaths.add(path);
+
+        // Track first seen time
+        if (!fileFirstSeen[path]) {
+            fileFirstSeen[path] = now;
+        }
+
+        // Check if stuck
+        const minutes = (now - fileFirstSeen[path]) / 60000;
+
+        // Skip if dismissed recently (within 1 hour)
+        if (dismissedStuckFiles[path] && (now - dismissedStuckFiles[path]) < 3600000) {
+            return;
+        }
+
+        if (minutes >= STUCK_THRESHOLD_MINUTES) {
+            newStuckFiles.push({
+                path,
+                filename: t.filename || path.split('/').pop(),
+                minutes: Math.round(minutes),
+                severe: minutes >= STUCK_SEVERE_MINUTES
+            });
+        }
+    });
+
+    // Clean up files no longer in queue
+    Object.keys(fileFirstSeen).forEach(path => {
+        if (!currentPaths.has(path)) {
+            delete fileFirstSeen[path];
+        }
+    });
+
+    // Save to localStorage
+    localStorage.setItem('fileFirstSeen', JSON.stringify(fileFirstSeen));
+
+    // Sort by time (oldest first)
+    stuckFiles = newStuckFiles.sort((a, b) => b.minutes - a.minutes);
+
+    updateStuckAlert();
+    return stuckFiles;
+}
+
+function updateStuckAlert() {
+    if (stuckFiles.length === 0) {
+        elements.stuckAlert?.classList.add('hidden');
+        return;
+    }
+
+    elements.stuckAlert?.classList.remove('hidden');
+
+    const oldest = stuckFiles[0];
+    const count = stuckFiles.length;
+
+    if (elements.stuckAlertTitle) {
+        elements.stuckAlertTitle.textContent = `${count} file${count > 1 ? 's' : ''} appear${count === 1 ? 's' : ''} stuck`;
+    }
+
+    if (elements.stuckAlertSubtitle) {
+        elements.stuckAlertSubtitle.textContent = `Oldest: ${oldest.filename} (${oldest.minutes} min)`;
+    }
+
+    // Notify on first detection of stuck files
+    if (notificationsEnabled && stuckFiles.some(f => f.minutes === STUCK_THRESHOLD_MINUTES)) {
+        showNotification('Files Stuck', `${count} file(s) haven't progressed in ${STUCK_THRESHOLD_MINUTES}+ minutes`);
+    }
+}
+
+function toggleStuckList() {
+    const list = elements.stuckFilesList;
+    if (!list) return;
+
+    const isExpanded = list.classList.toggle('expanded');
+
+    if (isExpanded) {
+        list.innerHTML = stuckFiles.map(f => `
+            <div class="stuck-file-item">
+                <span class="stuck-file-name" title="${escapeHtml(f.path)}">${escapeHtml(f.filename)}</span>
+                <span class="stuck-file-time">${f.minutes}m</span>
+                <button class="stuck-file-btn" onclick="retryStuckFile('${escapeHtml(f.path)}')">Retry</button>
+                <button class="stuck-file-btn" onclick="dismissStuckFile('${escapeHtml(f.path)}')">Dismiss</button>
+            </div>
+        `).join('');
+    }
+}
+
+async function fixAllStuck() {
+    showToast(`Retrying ${stuckFiles.length} stuck files...`, 'warning');
+
+    for (const file of stuckFiles) {
+        await executeAction('/api/actions/download', { path: file.path });
+    }
+
+    // Clear tracking for these files
+    stuckFiles.forEach(f => {
+        delete fileFirstSeen[f.path];
+    });
+    localStorage.setItem('fileFirstSeen', JSON.stringify(fileFirstSeen));
+
+    showToast('Retry commands sent for all stuck files', 'success');
+}
+
+async function retryStuckFile(path) {
+    await executeAction('/api/actions/download', { path });
+    delete fileFirstSeen[path];
+    localStorage.setItem('fileFirstSeen', JSON.stringify(fileFirstSeen));
+}
+
+function dismissStuckFile(path) {
+    dismissedStuckFiles[path] = Date.now();
+    localStorage.setItem('dismissedStuckFiles', JSON.stringify(dismissedStuckFiles));
+
+    stuckFiles = stuckFiles.filter(f => f.path !== path);
+    updateStuckAlert();
+    toggleStuckList(); // Refresh list
+    toggleStuckList();
+}
+
+function cleanupOldStuckTracking() {
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+
+    // Clean up old dismissed entries
+    Object.keys(dismissedStuckFiles).forEach(path => {
+        if (dismissedStuckFiles[path] < oneHourAgo) {
+            delete dismissedStuckFiles[path];
+        }
+    });
+    localStorage.setItem('dismissedStuckFiles', JSON.stringify(dismissedStuckFiles));
+
+    // Clean up very old firstSeen entries (older than 24 hours)
+    const oneDayAgo = now - 86400000;
+    Object.keys(fileFirstSeen).forEach(path => {
+        if (fileFirstSeen[path] < oneDayAgo) {
+            delete fileFirstSeen[path];
+        }
+    });
+    localStorage.setItem('fileFirstSeen', JSON.stringify(fileFirstSeen));
+}
+
+// ==================== CONTAINERS ====================
+
+async function fetchContainers() {
+    try {
+        const response = await fetch(`${API_BASE}/api/containers`);
+        const data = await response.json();
+        renderContainers(data.containers || []);
+    } catch (error) {
+        console.error('Failed to fetch containers:', error);
+    }
+}
+
+function renderContainers(containers) {
+    if (!elements.containersGrid) return;
+
+    if (containers.length === 0) {
+        elements.containersGrid.innerHTML = '<div class="empty-state">No containers found</div>';
+        return;
+    }
+
+    elements.containersGrid.innerHTML = containers.map(container => {
+        const mapped = CONTAINER_ICONS[container.id] || {
+            name: formatContainerName(container.id),
+            icon: '📱'
+        };
+
+        const statusClass = container.state === 'syncing' ? 'syncing' :
+                           container.state === 'error' ? 'error' : 'idle';
+
+        return `
+            <div class="container-card ${container.state === 'syncing' ? 'syncing' : ''}">
+                <div class="container-icon">${mapped.icon}</div>
+                <div class="container-info">
+                    <div class="container-name">${escapeHtml(mapped.name)}</div>
+                    <div class="container-stats">
+                        <span class="container-status ${statusClass}"></span>
+                        <span>${container.items || 0} items</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatContainerName(containerId) {
+    // Convert com.company.AppName to "App Name"
+    const parts = containerId.split('.');
+    const name = parts[parts.length - 1];
+    return name.replace(/([A-Z])/g, ' $1').trim();
+}

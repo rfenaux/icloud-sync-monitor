@@ -10,15 +10,24 @@
 <body>
     <div class="container">
         <header>
-            <h1>
-                <span class="header-icon" id="header-icon">☁️</span>
-                iCloud Sync Monitor
-            </h1>
-            <div style="display: flex; align-items: center;">
+            <div class="header-left">
+                <h1>
+                    <span class="header-icon" id="header-icon">☁️</span>
+                    iCloud Sync Monitor
+                </h1>
+                <div class="health-score good" id="health-score">
+                    <span class="health-score-value" id="health-score-value">--</span>
+                    <span class="health-score-label">Health</span>
+                </div>
+            </div>
+            <div class="header-right">
                 <div class="speed-indicator" id="speed-indicator">
                     <span class="speed-down">↓ --</span>
                     <span class="speed-up">↑ --</span>
                 </div>
+                <button class="theme-toggle" id="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark mode">
+                    <span class="theme-toggle-icon" id="theme-icon">🌙</span>
+                </button>
                 <div class="connection-status">
                     <span id="connection-indicator" class="indicator disconnected"></span>
                     <span id="connection-text">Connecting...</span>
@@ -28,6 +37,20 @@
         </header>
 
         <main>
+            <!-- Stuck Alert Banner -->
+            <div class="stuck-alert hidden" id="stuck-alert">
+                <span class="stuck-alert-icon">⚠️</span>
+                <div class="stuck-alert-content">
+                    <div class="stuck-alert-title" id="stuck-alert-title">Files appear stuck</div>
+                    <div class="stuck-alert-subtitle" id="stuck-alert-subtitle">Some files haven't progressed in over 10 minutes</div>
+                    <div class="stuck-files-list" id="stuck-files-list"></div>
+                </div>
+                <div class="stuck-alert-actions">
+                    <button class="stuck-alert-btn" onclick="toggleStuckList()">Details</button>
+                    <button class="stuck-alert-btn primary" onclick="fixAllStuck()">Fix All</button>
+                </div>
+            </div>
+
             <!-- Status Cards -->
             <section class="status-cards">
                 <div class="card downloads" id="card-downloads">
@@ -69,6 +92,14 @@
                 </div>
                 <div class="quota-bar">
                     <div class="quota-fill" id="quota-fill" style="width: 0%"></div>
+                </div>
+            </section>
+
+            <!-- Containers -->
+            <section class="containers-section">
+                <h2>Containers</h2>
+                <div class="containers-grid" id="containers-grid">
+                    <div class="empty-state">Loading containers...</div>
                 </div>
             </section>
 

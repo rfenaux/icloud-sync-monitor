@@ -1,7 +1,24 @@
 /* iCloud Sync Monitor - Dashboard Styles */
-/* Enhanced with live animations and visual polish */
+/* Enhanced with live animations, dark mode, and visual polish */
 
+/* ==================== LIGHT MODE (DEFAULT) ==================== */
 :root {
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --accent-blue: #007aff;
+    --accent-green: #34c759;
+    --accent-orange: #ff9500;
+    --accent-red: #ff3b30;
+    --border-color: #d2d2d7;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ==================== DARK MODE ==================== */
+body.dark-mode {
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-card: #0f3460;
@@ -12,6 +29,26 @@
     --accent-orange: #fb923c;
     --accent-red: #f87171;
     --border-color: #2a2a4a;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* System preference detection */
+@media (prefers-color-scheme: dark) {
+    :root:not(.light-mode-forced) {
+        --bg-primary: #1a1a2e;
+        --bg-secondary: #16213e;
+        --bg-card: #0f3460;
+        --text-primary: #eaeaea;
+        --text-secondary: #a0a0a0;
+        --accent-blue: #4da8da;
+        --accent-green: #4ade80;
+        --accent-orange: #fb923c;
+        --accent-red: #f87171;
+        --border-color: #2a2a4a;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+        --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
 }
 
 * {
@@ -26,6 +63,12 @@ body {
     color: var(--text-primary);
     min-height: 100vh;
     line-height: 1.5;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Theme transition for all elements */
+*, *::before, *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .container {
@@ -723,4 +766,313 @@ footer {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
+}
+
+/* ==================== THEME TOGGLE ==================== */
+
+.theme-toggle {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.theme-toggle:hover {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.theme-toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+    transform: rotate(20deg);
+}
+
+/* ==================== HEALTH SCORE ==================== */
+
+.health-score {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-card);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: var(--card-shadow);
+}
+
+.health-score-value {
+    font-family: 'SF Mono', monospace;
+    min-width: 30px;
+    text-align: right;
+}
+
+.health-score.good { color: var(--accent-green); }
+.health-score.warning { color: var(--accent-orange); }
+.health-score.critical { color: var(--accent-red); }
+
+.health-score-label {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 0.75rem;
+}
+
+/* ==================== STUCK ALERT BANNER ==================== */
+
+.stuck-alert {
+    background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    animation: pulse-warning 2s ease-in-out infinite;
+    box-shadow: 0 4px 12px rgba(251, 146, 60, 0.3);
+}
+
+.stuck-alert.hidden {
+    display: none;
+}
+
+.stuck-alert-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.stuck-alert-content {
+    flex: 1;
+}
+
+.stuck-alert-title {
+    font-weight: 600;
+    color: white;
+    margin-bottom: 2px;
+}
+
+.stuck-alert-subtitle {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stuck-alert-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.stuck-alert-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.stuck-alert-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.stuck-alert-btn.primary {
+    background: white;
+    color: var(--accent-orange);
+    border-color: white;
+}
+
+.stuck-alert-btn.primary:hover {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+/* Stuck files list (expandable) */
+.stuck-files-list {
+    margin-top: 12px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.stuck-files-list.expanded {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.stuck-file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.8rem;
+    color: white;
+}
+
+.stuck-file-item:last-child {
+    border-bottom: none;
+}
+
+.stuck-file-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stuck-file-time {
+    color: rgba(255, 255, 255, 0.7);
+    margin-left: 12px;
+    font-family: 'SF Mono', monospace;
+}
+
+.stuck-file-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    margin-left: 8px;
+}
+
+.stuck-file-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ==================== CONTAINERS SECTION ==================== */
+
+.containers-section {
+    margin-bottom: 30px;
+}
+
+.containers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.container-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--card-shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.container-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.container-card.syncing {
+    animation: pulse-sync 2s ease-in-out infinite;
+}
+
+.container-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.container-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.container-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.container-stats {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.container-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+}
+
+.container-status.syncing {
+    background: var(--accent-blue);
+    box-shadow: 0 0 6px var(--accent-blue);
+}
+
+.container-status.idle {
+    background: var(--accent-green);
+}
+
+.container-status.error {
+    background: var(--accent-red);
+}
+
+/* ==================== HEADER ENHANCEMENTS ==================== */
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Responsive adjustments for new components */
+@media (max-width: 600px) {
+    .stuck-alert {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .stuck-alert-actions {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .containers-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .health-score {
+        display: none;
+    }
+
+    .header-right {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
 }

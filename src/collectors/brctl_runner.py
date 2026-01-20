@@ -154,10 +154,17 @@ class BrctlRunner:
 
         containers = []
         current_container = None
+        current_items = 0
 
         for line in raw_output.split("\n"):
             # Container line starts with <
             if line.startswith("<"):
+                # Save previous container if exists
+                if current_container:
+                    current_container["items"] = current_items
+                    containers.append(current_container)
+                    current_items = 0
+
                 # Parse container ID and state
                 match = re.match(r"<([^>]+)>\s+\[([^\]]+)\]\s*\{([^}]+)\}", line)
                 if match:
@@ -172,6 +179,14 @@ class BrctlRunner:
                             key, value = part.split(":", 1)
                             state[key] = value
 
+                    # Determine simplified state
+                    if "blocked" in state_str.lower() or "error" in state_str.lower():
+                        simple_state = "error"
+                    elif "needs-sync" in state_str.lower() or state.get("client", "").lower() in ("syncing", "busy"):
+                        simple_state = "syncing"
+                    else:
+                        simple_state = "idle"
+
                     current_container = {
                         "id": container_id,
                         "mode": mode,
@@ -180,8 +195,17 @@ class BrctlRunner:
                         "last_sync": state.get("last-sync", "never"),
                         "needs_sync": "needs-sync" in state_str,
                         "blocked": "blocked" in state_str,
+                        "state": simple_state,
                     }
-                    containers.append(current_container)
+
+            # Count items (lines that look like file entries - indented with paths)
+            elif current_container and line.strip() and line.startswith("    "):
+                current_items += 1
+
+        # Don't forget the last container
+        if current_container:
+            current_container["items"] = current_items
+            containers.append(current_container)
 
         return containers
 
