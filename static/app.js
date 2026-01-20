@@ -2,7 +2,8 @@
  * iCloud Sync Monitor - Enhanced Dashboard JavaScript
  * Features: Animated counters, live timestamps, sparklines, file icons,
  * favicon badges, notifications, activity feed, speed indicator,
- * dark mode, stuck file detection, health score, containers
+ * dark mode, stuck file detection, health score, containers,
+ * keyboard shortcuts, search, filters, sound alerts
  */
 
 const API_BASE = '';
@@ -22,6 +23,19 @@ let lastBytesUp = 0;
 let isSyncing = false;
 let notificationsEnabled = false;
 let lastErrorCount = 0;
+
+// Search and filter state
+let searchQuery = '';
+let activeFilters = {
+    type: 'all',
+    status: 'all',
+    fileType: 'all'
+};
+let allTransfers = []; // Store all transfers for filtering
+
+// Sound alerts state
+let soundEnabled = localStorage.getItem('soundEnabled') === 'true';
+let audioContext = null;
 
 // Sparkline data (last 60 data points = 5 minutes at 5s intervals)
 const sparklineData = {
@@ -79,7 +93,7 @@ const elements = {
     sparklineDownloads: document.getElementById('sparkline-downloads'),
     sparklineUploads: document.getElementById('sparkline-uploads'),
     sparklineErrors: document.getElementById('sparkline-errors'),
-    // New Phase 3 elements
+    // Phase 3 elements
     themeToggle: document.getElementById('theme-toggle'),
     themeIcon: document.getElementById('theme-icon'),
     healthScore: document.getElementById('health-score'),
@@ -89,6 +103,14 @@ const elements = {
     stuckAlertSubtitle: document.getElementById('stuck-alert-subtitle'),
     stuckFilesList: document.getElementById('stuck-files-list'),
     containersGrid: document.getElementById('containers-grid'),
+    // Phase 4 elements (Sprint 1)
+    searchInput: document.getElementById('search-input'),
+    searchClear: document.getElementById('search-clear'),
+    filterBar: document.getElementById('filter-bar'),
+    filterResults: document.getElementById('filter-results'),
+    soundToggle: document.getElementById('sound-toggle'),
+    soundIcon: document.getElementById('sound-icon'),
+    shortcutsOverlay: document.getElementById('shortcuts-overlay'),
 };
 
 // File type icons (SVG inline)
@@ -119,6 +141,10 @@ const FILE_EXTENSIONS = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
+    initSound();
+    initSearch();
+    initFilters();
+    initKeyboardShortcuts();
     fetchInitialData();
     fetchContainers();
     connectWebSocket();
@@ -351,40 +377,17 @@ function updateQuota(quota) {
 // ==================== TRANSFERS LIST ====================
 
 function updateTransfersList(downloads, uploads) {
-    const items = [
+    // Store all transfers for filtering
+    allTransfers = [
         ...downloads.map(d => ({ ...d, type: 'download' })),
         ...uploads.map(u => ({ ...u, type: 'upload' })),
     ];
 
     // Check for stuck files
-    checkStuckFiles(items);
+    checkStuckFiles(allTransfers);
 
-    if (items.length === 0) {
-        elements.transfersList.innerHTML = '<div class="empty-state">No active transfers</div>';
-        return;
-    }
-
-    elements.transfersList.innerHTML = items.slice(0, 30).map(item => {
-        const icon = getFileIcon(item.filename);
-        const isUpload = item.type === 'upload';
-        const progress = item.progress || Math.floor(Math.random() * 100); // Simulated for now
-
-        return `
-        <div class="transfer-item ${isUpload ? 'upload' : ''}">
-            <span class="file-icon">${icon}</span>
-            <span class="transfer-icon ${isUpload ? 'upload' : ''}">
-                ${isUpload ? '↑' : '↓'}
-            </span>
-            <span class="transfer-name" title="${escapeHtml(item.filename)}">
-                ${escapeHtml(item.filename)}
-            </span>
-            <span class="transfer-size">${formatBytes(item.size)}</span>
-            <div class="transfer-progress">
-                <div class="transfer-progress-fill" style="width: ${progress}%"></div>
-            </div>
-            <span class="transfer-status ${item.state === 'queued' ? 'queued' : ''}">${item.state}</span>
-        </div>
-    `}).join('');
+    // Apply current filters and render
+    applyFilters();
 }
 
 // ==================== FILE ICONS ====================
@@ -1048,4 +1051,345 @@ function formatContainerName(containerId) {
     const parts = containerId.split('.');
     const name = parts[parts.length - 1];
     return name.replace(/([A-Z])/g, ' $1').trim();
+}
+
+// ==================== KEYBOARD SHORTCUTS ====================
+
+function initKeyboardShortcuts() {
+    document.addEventListener('keydown', handleKeyboardShortcut);
+}
+
+function handleKeyboardShortcut(e) {
+    // Ignore if typing in an input field
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        // Only handle Escape in inputs
+        if (e.key === 'Escape') {
+            e.target.blur();
+            clearSearch();
+        }
+        return;
+    }
+
+    // Ignore if a dialog is open (except for Escape)
+    const dialogOpen = !document.getElementById('dialog-overlay').classList.contains('hidden');
+    const shortcutsOpen = !elements.shortcutsOverlay?.classList.contains('hidden');
+
+    if (e.key === 'Escape') {
+        if (shortcutsOpen) {
+            closeShortcutsHelp();
+            return;
+        }
+        if (dialogOpen) {
+            closeDialog();
+            return;
+        }
+        clearSearch();
+        return;
+    }
+
+    if (dialogOpen || shortcutsOpen) return;
+
+    switch (e.key) {
+        case '/':
+            e.preventDefault();
+            focusSearch();
+            break;
+        case 't':
+        case 'T':
+            toggleDarkMode();
+            break;
+        case 's':
+        case 'S':
+            toggleSound();
+            break;
+        case 'r':
+            if (e.shiftKey) {
+                confirmRestartBird();
+            } else {
+                fetchInitialData();
+                showToast('Data refreshed', 'success');
+            }
+            break;
+        case 'R':
+            if (e.shiftKey) {
+                confirmRestartBird();
+            }
+            break;
+        case 'd':
+        case 'D':
+            showDownloadDialog();
+            break;
+        case 'e':
+        case 'E':
+            showEvictDialog();
+            break;
+        case 'f':
+        case 'F':
+            if (stuckFiles.length > 0) {
+                fixAllStuck();
+            }
+            break;
+        case '?':
+            showShortcutsHelp();
+            break;
+    }
+}
+
+function showShortcutsHelp() {
+    elements.shortcutsOverlay?.classList.remove('hidden');
+}
+
+function closeShortcutsHelp() {
+    elements.shortcutsOverlay?.classList.add('hidden');
+}
+
+// ==================== SEARCH ====================
+
+function initSearch() {
+    if (!elements.searchInput) return;
+
+    elements.searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase().trim();
+        elements.searchClear?.classList.toggle('hidden', !searchQuery);
+        applyFilters();
+    });
+
+    elements.searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            clearSearch();
+            elements.searchInput.blur();
+        }
+    });
+}
+
+function focusSearch() {
+    elements.searchInput?.focus();
+    elements.searchInput?.select();
+}
+
+function clearSearch() {
+    searchQuery = '';
+    if (elements.searchInput) {
+        elements.searchInput.value = '';
+    }
+    elements.searchClear?.classList.add('hidden');
+    applyFilters();
+}
+
+// ==================== FILTERS ====================
+
+function initFilters() {
+    if (!elements.filterBar) return;
+
+    // Add click handlers to all filter chips
+    const chips = elements.filterBar.querySelectorAll('.filter-chip');
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const filterType = chip.dataset.filter;
+            const value = chip.dataset.value;
+
+            // Update active state for this filter group
+            const group = chip.closest('.filter-group');
+            group.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+
+            // Update filter state
+            activeFilters[filterType] = value;
+            applyFilters();
+        });
+    });
+}
+
+function applyFilters() {
+    const filtered = getFilteredTransfers();
+    renderFilteredTransfers(filtered);
+    updateFilterResults(filtered.length, allTransfers.length);
+}
+
+function getFilteredTransfers() {
+    return allTransfers.filter(transfer => {
+        // Search filter
+        if (searchQuery) {
+            const filename = (transfer.filename || '').toLowerCase();
+            const path = (transfer.path || '').toLowerCase();
+            if (!filename.includes(searchQuery) && !path.includes(searchQuery)) {
+                return false;
+            }
+        }
+
+        // Type filter
+        if (activeFilters.type !== 'all') {
+            if (transfer.type !== activeFilters.type) {
+                return false;
+            }
+        }
+
+        // Status filter
+        if (activeFilters.status !== 'all') {
+            const isStuck = stuckFiles.some(s => s.path === transfer.path || s.filename === transfer.filename);
+            if (activeFilters.status === 'stuck' && !isStuck) return false;
+            if (activeFilters.status === 'active' && transfer.state !== 'active') return false;
+            if (activeFilters.status === 'queued' && transfer.state !== 'queued') return false;
+        }
+
+        // File type filter
+        if (activeFilters.fileType !== 'all') {
+            const fileType = getFileType(transfer.filename);
+            if (fileType !== activeFilters.fileType) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+}
+
+function getFileType(filename) {
+    if (!filename) return 'other';
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (!ext) return 'other';
+
+    for (const [type, extensions] of Object.entries(FILE_EXTENSIONS)) {
+        if (extensions.includes(ext)) {
+            return type;
+        }
+    }
+    return 'other';
+}
+
+function renderFilteredTransfers(items) {
+    if (items.length === 0) {
+        const message = searchQuery || Object.values(activeFilters).some(v => v !== 'all')
+            ? 'No transfers match your filters'
+            : 'No active transfers';
+        elements.transfersList.innerHTML = `<div class="empty-state">${message}</div>`;
+        return;
+    }
+
+    elements.transfersList.innerHTML = items.slice(0, 30).map(item => {
+        const icon = getFileIcon(item.filename);
+        const isUpload = item.type === 'upload';
+        const progress = item.progress || Math.floor(Math.random() * 100);
+        const isStuck = stuckFiles.some(s => s.path === item.path || s.filename === item.filename);
+
+        return `
+        <div class="transfer-item ${isUpload ? 'upload' : ''} ${isStuck ? 'stuck' : ''}">
+            <span class="file-icon">${icon}</span>
+            <span class="transfer-icon ${isUpload ? 'upload' : ''}">
+                ${isUpload ? '↑' : '↓'}
+            </span>
+            <span class="transfer-name" title="${escapeHtml(item.filename)}">
+                ${highlightMatch(item.filename, searchQuery)}
+            </span>
+            <span class="transfer-size">${formatBytes(item.size)}</span>
+            <div class="transfer-progress">
+                <div class="transfer-progress-fill" style="width: ${progress}%"></div>
+            </div>
+            <span class="transfer-status ${item.state === 'queued' ? 'queued' : ''} ${isStuck ? 'stuck' : ''}">${isStuck ? 'stuck' : item.state}</span>
+        </div>
+    `}).join('');
+}
+
+function highlightMatch(text, query) {
+    if (!query || !text) return escapeHtml(text);
+
+    const escaped = escapeHtml(text);
+    const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+    return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function updateFilterResults(shown, total) {
+    if (!elements.filterResults) return;
+
+    if (searchQuery || Object.values(activeFilters).some(v => v !== 'all')) {
+        elements.filterResults.textContent = `${shown} of ${total} transfers`;
+    } else {
+        elements.filterResults.textContent = '';
+    }
+}
+
+// ==================== SOUND ALERTS ====================
+
+function initSound() {
+    updateSoundIcon();
+}
+
+function toggleSound() {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('soundEnabled', soundEnabled);
+    updateSoundIcon();
+    showToast(soundEnabled ? 'Sound alerts enabled' : 'Sound alerts disabled', 'success');
+
+    // Play test sound when enabling
+    if (soundEnabled) {
+        playSound('chime');
+    }
+}
+
+function updateSoundIcon() {
+    if (elements.soundIcon) {
+        elements.soundIcon.textContent = soundEnabled ? '🔊' : '🔇';
+    }
+    if (elements.soundToggle) {
+        elements.soundToggle.classList.toggle('enabled', soundEnabled);
+    }
+}
+
+function playSound(type) {
+    if (!soundEnabled) return;
+
+    try {
+        // Use Web Audio API for simple tones
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Different sounds for different events
+        const sounds = {
+            chime: { freq: 880, duration: 150, type: 'sine' },
+            alert: { freq: 440, duration: 200, type: 'square' },
+            warning: { freq: 330, duration: 300, type: 'triangle' },
+            success: { freq: 660, duration: 100, type: 'sine' },
+        };
+
+        const sound = sounds[type] || sounds.chime;
+
+        oscillator.type = sound.type;
+        oscillator.frequency.setValueAtTime(sound.freq, audioContext.currentTime);
+
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + sound.duration / 1000);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + sound.duration / 1000);
+    } catch (e) {
+        console.warn('Could not play sound:', e);
+    }
+}
+
+// Play sound on certain events
+function playSoundOnEvent(event) {
+    if (!soundEnabled) return;
+
+    switch (event) {
+        case 'sync_complete':
+            playSound('success');
+            break;
+        case 'new_error':
+            playSound('alert');
+            break;
+        case 'stuck_detected':
+            playSound('warning');
+            break;
+    }
 }

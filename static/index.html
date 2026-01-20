@@ -21,10 +21,18 @@
                 </div>
             </div>
             <div class="header-right">
+                <div class="search-box" id="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="Search files... (Press /)" autocomplete="off">
+                    <button class="search-clear hidden" id="search-clear" onclick="clearSearch()">✕</button>
+                </div>
                 <div class="speed-indicator" id="speed-indicator">
                     <span class="speed-down">↓ --</span>
                     <span class="speed-up">↑ --</span>
                 </div>
+                <button class="sound-toggle" id="sound-toggle" onclick="toggleSound()" title="Toggle sound alerts">
+                    <span class="sound-toggle-icon" id="sound-icon">🔇</span>
+                </button>
                 <button class="theme-toggle" id="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark mode">
                     <span class="theme-toggle-icon" id="theme-icon">🌙</span>
                 </button>
@@ -35,6 +43,32 @@
                 </div>
             </div>
         </header>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar" id="filter-bar">
+            <div class="filter-group">
+                <span class="filter-label">Type:</span>
+                <button class="filter-chip active" data-filter="type" data-value="all">All</button>
+                <button class="filter-chip" data-filter="type" data-value="download">Downloads</button>
+                <button class="filter-chip" data-filter="type" data-value="upload">Uploads</button>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Status:</span>
+                <button class="filter-chip active" data-filter="status" data-value="all">All</button>
+                <button class="filter-chip" data-filter="status" data-value="active">Active</button>
+                <button class="filter-chip" data-filter="status" data-value="queued">Queued</button>
+                <button class="filter-chip" data-filter="status" data-value="stuck">Stuck</button>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">File:</span>
+                <button class="filter-chip active" data-filter="fileType" data-value="all">All</button>
+                <button class="filter-chip" data-filter="fileType" data-value="image">Images</button>
+                <button class="filter-chip" data-filter="fileType" data-value="video">Videos</button>
+                <button class="filter-chip" data-filter="fileType" data-value="document">Docs</button>
+                <button class="filter-chip" data-filter="fileType" data-value="code">Code</button>
+            </div>
+            <div class="filter-results" id="filter-results"></div>
+        </div>
 
         <main>
             <!-- Stuck Alert Banner -->
@@ -147,6 +181,7 @@
             <footer>
                 <span id="last-update">Updated just now</span>
                 <div class="footer-right">
+                    <span class="keyboard-hint" onclick="showShortcutsHelp()">Press <kbd>?</kbd> for shortcuts</span>
                     <span id="status-text">--</span>
                 </div>
             </footer>
@@ -166,6 +201,37 @@
             <div class="dialog-buttons">
                 <button class="btn-cancel" onclick="closeDialog()">Cancel</button>
                 <button class="btn-confirm" id="dialog-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div id="shortcuts-overlay" class="dialog-overlay hidden">
+        <div class="dialog shortcuts-dialog">
+            <h3>Keyboard Shortcuts</h3>
+            <div class="shortcuts-content">
+                <div class="shortcuts-section">
+                    <h4>Navigation</h4>
+                    <div class="shortcut-row"><kbd>/</kbd> <span>Focus search</span></div>
+                    <div class="shortcut-row"><kbd>Esc</kbd> <span>Clear search / Close dialog</span></div>
+                    <div class="shortcut-row"><kbd>R</kbd> <span>Refresh data</span></div>
+                    <div class="shortcut-row"><kbd>?</kbd> <span>Show this help</span></div>
+                </div>
+                <div class="shortcuts-section">
+                    <h4>Settings</h4>
+                    <div class="shortcut-row"><kbd>T</kbd> <span>Toggle dark mode</span></div>
+                    <div class="shortcut-row"><kbd>S</kbd> <span>Toggle sound alerts</span></div>
+                </div>
+                <div class="shortcuts-section">
+                    <h4>Actions</h4>
+                    <div class="shortcut-row"><kbd>D</kbd> <span>Force download file</span></div>
+                    <div class="shortcut-row"><kbd>E</kbd> <span>Evict file</span></div>
+                    <div class="shortcut-row"><kbd>F</kbd> <span>Fix all stuck files</span></div>
+                    <div class="shortcut-row"><kbd>Shift</kbd>+<kbd>R</kbd> <span>Restart sync daemon</span></div>
+                </div>
+            </div>
+            <div class="dialog-buttons">
+                <button class="btn-confirm" onclick="closeShortcutsHelp()">Got it</button>
             </div>
         </div>
     </div>
