@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
+        <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor/.venv/bin/python</string>
         <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor/src/server.py</string>
     </array>
 

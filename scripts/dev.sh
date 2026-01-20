@@ -17,4 +17,4 @@ echo "Press Ctrl+C to stop"
 echo ""
 
 cd "$PROJECT_DIR"
-OPEN_BROWSER=true python3 src/server.py
+OPEN_BROWSER=true .venv/bin/python src/server.py

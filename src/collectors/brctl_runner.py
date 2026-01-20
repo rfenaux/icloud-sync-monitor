@@ -57,8 +57,8 @@ class BrctlRunner:
         if not output:
             return None
 
-        # Parse output like "17986550191 bytes remaining"
-        match = re.search(r"(\d+)\s*bytes?\s*remaining", output, re.IGNORECASE)
+        # Parse output like "17986550191 bytes of quota remaining in personal account"
+        match = re.search(r"(\d+)\s*bytes?\s*(?:of\s+quota\s+)?remaining", output, re.IGNORECASE)
         if match:
             remaining = int(match.group(1))
             return {

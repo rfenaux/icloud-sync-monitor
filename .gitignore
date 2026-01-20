@@ -19,8 +19,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-venv/
 .venv/
+venv/
 ENV/
 
 # Logs

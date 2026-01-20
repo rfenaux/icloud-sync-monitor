@@ -33,23 +33,27 @@ python3 --version
 echo "2. Creating logs directory..."
 mkdir -p "$PROJECT_DIR/logs"
 
+# Create virtual environment
+echo "3. Creating virtual environment..."
+python3 -m venv "$PROJECT_DIR/.venv"
+
 # Install dependencies
-echo "3. Installing Python dependencies..."
-python3 -m pip install --quiet websockets
+echo "4. Installing Python dependencies..."
+"$PROJECT_DIR/.venv/bin/pip" install --quiet websockets
 
 # Stop existing service if running
 if launchctl list | grep -q "com.raphael.icloud-sync-monitor"; then
-    echo "4. Stopping existing service..."
+    echo "5. Stopping existing service..."
     launchctl unload "$PLIST_DEST" 2>/dev/null || true
 fi
 
 # Copy plist
-echo "5. Installing LaunchAgent..."
+echo "6. Installing LaunchAgent..."
 mkdir -p "$HOME/Library/LaunchAgents"
 cp "$PLIST_SOURCE" "$PLIST_DEST"
 
 # Load service
-echo "6. Starting service..."
+echo "7. Starting service..."
 launchctl load "$PLIST_DEST"
 
 echo ""
