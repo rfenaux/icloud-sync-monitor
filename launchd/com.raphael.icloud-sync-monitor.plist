@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.raphael.icloud-sync-monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor/src/server.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OPEN_BROWSER</key>
+        <string>true</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- CRITICAL: Low priority to never compete with bird daemon -->
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Throttle restarts to prevent loops -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor/logs/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor/logs/stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/raphael/Documents/Projects - Private/icloud-sync-monitor</string>
+</dict>
+</plist>

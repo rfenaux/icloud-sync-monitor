@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iCloud Sync Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>iCloud Sync Monitor</h1>
+            <div class="connection-status">
+                <span id="connection-indicator" class="indicator disconnected"></span>
+                <span id="connection-text">Connecting...</span>
+                <span class="port">:8430</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Status Cards -->
+            <section class="status-cards">
+                <div class="card downloads">
+                    <div class="card-icon">&#x2193;</div>
+                    <div class="card-content">
+                        <div class="card-value" id="downloads-count">--</div>
+                        <div class="card-label">Downloads</div>
+                        <div class="card-sublabel" id="downloads-total">-- queued</div>
+                    </div>
+                </div>
+
+                <div class="card uploads">
+                    <div class="card-icon">&#x2191;</div>
+                    <div class="card-content">
+                        <div class="card-value" id="uploads-count">--</div>
+                        <div class="card-label">Uploads</div>
+                        <div class="card-sublabel" id="uploads-total">-- queued</div>
+                    </div>
+                </div>
+
+                <div class="card errors">
+                    <div class="card-icon">&#x26A0;</div>
+                    <div class="card-content">
+                        <div class="card-value" id="errors-count">--</div>
+                        <div class="card-label">Errors</div>
+                        <div class="card-sublabel">recent</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quota Bar -->
+            <section class="quota-section">
+                <div class="quota-header">
+                    <span class="quota-label">iCloud Storage</span>
+                    <span class="quota-value" id="quota-text">Loading...</span>
+                </div>
+                <div class="quota-bar">
+                    <div class="quota-fill" id="quota-fill" style="width: 0%"></div>
+                </div>
+            </section>
+
+            <!-- Active Transfers -->
+            <section class="transfers-section">
+                <h2>Active Transfers</h2>
+                <div class="transfers-list" id="transfers-list">
+                    <div class="empty-state">Loading transfers...</div>
+                </div>
+            </section>
+
+            <!-- Recent Errors -->
+            <section class="errors-section">
+                <h2>Recent Errors</h2>
+                <div class="errors-list" id="errors-list">
+                    <div class="empty-state">No errors</div>
+                </div>
+            </section>
+
+            <!-- Actions -->
+            <section class="actions-section">
+                <h2>Actions</h2>
+                <div class="actions-buttons">
+                    <button class="action-btn" id="btn-download" onclick="showDownloadDialog()">
+                        Force Download...
+                    </button>
+                    <button class="action-btn" id="btn-evict" onclick="showEvictDialog()">
+                        Evict File...
+                    </button>
+                    <button class="action-btn danger" id="btn-restart" onclick="confirmRestartBird()">
+                        Restart Sync
+                    </button>
+                </div>
+            </section>
+
+            <!-- Status footer -->
+            <footer>
+                <span id="last-update">Last update: --</span>
+                <span id="status-text">--</span>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Dialogs -->
+    <div id="dialog-overlay" class="dialog-overlay hidden">
+        <div class="dialog" id="dialog">
+            <h3 id="dialog-title">Dialog</h3>
+            <div id="dialog-content">
+                <input type="text" id="dialog-input" placeholder="Enter file path...">
+            </div>
+            <div class="dialog-buttons">
+                <button class="btn-cancel" onclick="closeDialog()">Cancel</button>
+                <button class="btn-confirm" id="dialog-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
