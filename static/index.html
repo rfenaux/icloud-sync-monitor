@@ -5,47 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iCloud Sync Monitor</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>" id="favicon">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>iCloud Sync Monitor</h1>
-            <div class="connection-status">
-                <span id="connection-indicator" class="indicator disconnected"></span>
-                <span id="connection-text">Connecting...</span>
-                <span class="port">:8430</span>
+            <h1>
+                <span class="header-icon" id="header-icon">☁️</span>
+                iCloud Sync Monitor
+            </h1>
+            <div style="display: flex; align-items: center;">
+                <div class="speed-indicator" id="speed-indicator">
+                    <span class="speed-down">↓ --</span>
+                    <span class="speed-up">↑ --</span>
+                </div>
+                <div class="connection-status">
+                    <span id="connection-indicator" class="indicator disconnected"></span>
+                    <span id="connection-text">Connecting...</span>
+                    <span class="port">:8430</span>
+                </div>
             </div>
         </header>
 
         <main>
             <!-- Status Cards -->
             <section class="status-cards">
-                <div class="card downloads">
-                    <div class="card-icon">&#x2193;</div>
+                <div class="card downloads" id="card-downloads">
+                    <div class="card-icon">↓</div>
                     <div class="card-content">
                         <div class="card-value" id="downloads-count">--</div>
                         <div class="card-label">Downloads</div>
                         <div class="card-sublabel" id="downloads-total">-- queued</div>
                     </div>
+                    <canvas class="card-sparkline" id="sparkline-downloads" width="200" height="30"></canvas>
                 </div>
 
-                <div class="card uploads">
-                    <div class="card-icon">&#x2191;</div>
+                <div class="card uploads" id="card-uploads">
+                    <div class="card-icon">↑</div>
                     <div class="card-content">
                         <div class="card-value" id="uploads-count">--</div>
                         <div class="card-label">Uploads</div>
                         <div class="card-sublabel" id="uploads-total">-- queued</div>
                     </div>
+                    <canvas class="card-sparkline" id="sparkline-uploads" width="200" height="30"></canvas>
                 </div>
 
-                <div class="card errors">
-                    <div class="card-icon">&#x26A0;</div>
+                <div class="card errors" id="card-errors">
+                    <div class="card-icon">⚠</div>
                     <div class="card-content">
                         <div class="card-value" id="errors-count">--</div>
                         <div class="card-label">Errors</div>
                         <div class="card-sublabel">recent</div>
                     </div>
+                    <canvas class="card-sparkline" id="sparkline-errors" width="200" height="30"></canvas>
                 </div>
             </section>
 
@@ -65,6 +77,14 @@
                 <h2>Active Transfers</h2>
                 <div class="transfers-list" id="transfers-list">
                     <div class="empty-state">Loading transfers...</div>
+                </div>
+            </section>
+
+            <!-- Activity Feed -->
+            <section class="activity-section">
+                <h2>Recent Activity</h2>
+                <div class="activity-feed" id="activity-feed">
+                    <div class="empty-state">No recent activity</div>
                 </div>
             </section>
 
@@ -94,11 +114,16 @@
 
             <!-- Status footer -->
             <footer>
-                <span id="last-update">Last update: --</span>
-                <span id="status-text">--</span>
+                <span id="last-update">Updated just now</span>
+                <div class="footer-right">
+                    <span id="status-text">--</span>
+                </div>
             </footer>
         </main>
     </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
 
     <!-- Dialogs -->
     <div id="dialog-overlay" class="dialog-overlay hidden">
