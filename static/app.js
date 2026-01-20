@@ -1393,3 +1393,410 @@ function playSoundOnEvent(event) {
             break;
     }
 }
+
+// ==================== RULES ENGINE ====================
+
+let rulesData = { rules: [], stats: {} };
+
+async function loadRules() {
+    try {
+        const response = await fetch('/api/rules');
+        const data = await response.json();
+        rulesData = data;
+        renderRules(data.rules);
+        updateRulesStats(data.stats);
+    } catch (error) {
+        console.error('Failed to load rules:', error);
+        document.getElementById('rules-list').innerHTML = '<div class="empty-state">Failed to load rules</div>';
+    }
+}
+
+function renderRules(rules) {
+    const container = document.getElementById('rules-list');
+    if (!rules || rules.length === 0) {
+        container.innerHTML = '<div class="empty-state">No rules configured. Click "+ Add Rule" to create one.</div>';
+        return;
+    }
+
+    container.innerHTML = rules.map(rule => {
+        const actionLabel = {
+            'retry_download': 'Retry',
+            'evict_and_retry': 'Evict & Retry',
+            'notify': 'Notify',
+            'ignore': 'Ignore'
+        }[rule.action] || rule.action;
+
+        const conditions = [];
+        if (rule.conditions.stuck_minutes) {
+            conditions.push(`>${rule.conditions.stuck_minutes}min stuck`);
+        }
+        if (rule.conditions.file_types && rule.conditions.file_types.length > 0) {
+            conditions.push(rule.conditions.file_types.join(', '));
+        }
+        if (rule.conditions.min_size_bytes > 0) {
+            conditions.push(`>${formatBytes(rule.conditions.min_size_bytes)}`);
+        }
+
+        return `
+            <div class="rule-card ${rule.enabled ? '' : 'disabled'}" data-rule-id="${rule.id}">
+                <div class="rule-toggle">
+                    <input type="checkbox" ${rule.enabled ? 'checked' : ''}
+                           onchange="toggleRule('${rule.id}')"
+                           title="${rule.enabled ? 'Disable rule' : 'Enable rule'}">
+                </div>
+                <div class="rule-info">
+                    <div class="rule-name">
+                        ${escapeHtml(rule.name)}
+                        <span class="rule-action-badge ${rule.action}">${actionLabel}</span>
+                    </div>
+                    <div class="rule-details">
+                        <span>Conditions: ${conditions.join(' • ') || 'Any stuck file'}</span>
+                        <span>Cooldown: ${rule.cooldown_minutes}min</span>
+                        <span>Max retries: ${rule.max_retries}</span>
+                    </div>
+                </div>
+                <div class="rule-actions">
+                    <button class="rule-btn" onclick="editRule('${rule.id}')" title="Edit rule">Edit</button>
+                    <button class="rule-btn danger" onclick="deleteRule('${rule.id}')" title="Delete rule">Delete</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateRulesStats(stats) {
+    document.getElementById('rules-enabled').textContent = stats.enabled_rules || 0;
+    document.getElementById('rules-executions').textContent = stats.executions_24h || 0;
+    document.getElementById('rules-success').textContent = stats.success_rate_24h || 0;
+}
+
+async function toggleRule(ruleId) {
+    try {
+        const response = await fetch(`/api/rules/${ruleId}/toggle`, { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Rule ${data.rule.enabled ? 'enabled' : 'disabled'}`, 'success');
+            loadRules();
+        } else {
+            showToast(data.message || 'Failed to toggle rule', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to toggle rule', 'error');
+    }
+}
+
+function showAddRuleModal() {
+    document.getElementById('rule-modal-title').textContent = 'Add Rule';
+    document.getElementById('rule-form').reset();
+    document.getElementById('rule-id').value = '';
+    document.getElementById('rule-enabled').checked = true;
+    document.getElementById('rule-modal-overlay').classList.remove('hidden');
+}
+
+function editRule(ruleId) {
+    const rule = rulesData.rules.find(r => r.id === ruleId);
+    if (!rule) return;
+
+    document.getElementById('rule-modal-title').textContent = 'Edit Rule';
+    document.getElementById('rule-id').value = rule.id;
+    document.getElementById('rule-name').value = rule.name;
+    document.getElementById('rule-action').value = rule.action;
+    document.getElementById('rule-stuck-minutes').value = rule.conditions.stuck_minutes || 30;
+    document.getElementById('rule-cooldown').value = rule.cooldown_minutes || 60;
+    document.getElementById('rule-max-retries').value = rule.max_retries || 3;
+    document.getElementById('rule-file-types').value = (rule.conditions.file_types || []).join(',');
+    document.getElementById('rule-containers').value = (rule.conditions.containers || []).join(',');
+    document.getElementById('rule-min-size').value = (rule.conditions.min_size_bytes || 0) / (1024 * 1024);
+    document.getElementById('rule-max-size').value = (rule.conditions.max_size_bytes || 0) / (1024 * 1024);
+    document.getElementById('rule-enabled').checked = rule.enabled;
+
+    document.getElementById('rule-modal-overlay').classList.remove('hidden');
+}
+
+function closeRuleModal() {
+    document.getElementById('rule-modal-overlay').classList.add('hidden');
+}
+
+async function saveRule(event) {
+    event.preventDefault();
+
+    const ruleId = document.getElementById('rule-id').value;
+    const fileTypes = document.getElementById('rule-file-types').value
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s);
+    const containers = document.getElementById('rule-containers').value
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s);
+
+    const ruleData = {
+        name: document.getElementById('rule-name').value,
+        action: document.getElementById('rule-action').value,
+        conditions: {
+            stuck_minutes: parseInt(document.getElementById('rule-stuck-minutes').value) || 30,
+            file_types: fileTypes,
+            containers: containers,
+            min_size_bytes: (parseFloat(document.getElementById('rule-min-size').value) || 0) * 1024 * 1024,
+            max_size_bytes: (parseFloat(document.getElementById('rule-max-size').value) || 0) * 1024 * 1024,
+        },
+        cooldown_minutes: parseInt(document.getElementById('rule-cooldown').value) || 60,
+        max_retries: parseInt(document.getElementById('rule-max-retries').value) || 3,
+        enabled: document.getElementById('rule-enabled').checked,
+    };
+
+    try {
+        const method = ruleId ? 'PUT' : 'POST';
+        const url = ruleId ? `/api/rules/${ruleId}` : '/api/rules';
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ruleData),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(ruleId ? 'Rule updated' : 'Rule created', 'success');
+            closeRuleModal();
+            loadRules();
+        } else {
+            showToast(data.message || 'Failed to save rule', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to save rule', 'error');
+    }
+}
+
+async function deleteRule(ruleId) {
+    if (!confirm('Delete this rule?')) return;
+
+    try {
+        const response = await fetch(`/api/rules/${ruleId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Rule deleted', 'success');
+            loadRules();
+        } else {
+            showToast(data.message || 'Failed to delete rule', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to delete rule', 'error');
+    }
+}
+
+async function showRulesLog() {
+    document.getElementById('rules-log-overlay').classList.remove('hidden');
+    document.getElementById('rules-log-content').innerHTML = '<div class="empty-state">Loading...</div>';
+
+    try {
+        const response = await fetch('/api/rules/log');
+        const data = await response.json();
+        renderRulesLog(data.log);
+    } catch (error) {
+        document.getElementById('rules-log-content').innerHTML = '<div class="empty-state">Failed to load log</div>';
+    }
+}
+
+function renderRulesLog(log) {
+    const container = document.getElementById('rules-log-content');
+    if (!log || log.length === 0) {
+        container.innerHTML = '<div class="empty-state">No executions logged yet</div>';
+        return;
+    }
+
+    container.innerHTML = log.map(entry => {
+        const time = new Date(entry.timestamp);
+        const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const filename = entry.file_path.split('/').pop();
+
+        return `
+            <div class="log-entry">
+                <div class="log-time">${timeStr}</div>
+                <div class="log-content">
+                    <div class="log-file" title="${escapeHtml(entry.file_path)}">${escapeHtml(filename)}</div>
+                    <div class="log-rule">${escapeHtml(entry.rule_name)} • ${entry.action} • Attempt ${entry.attempt}</div>
+                </div>
+                <div class="log-status ${entry.success ? 'success' : 'failed'}">
+                    ${entry.success ? 'Success' : 'Failed'}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function closeRulesLog() {
+    document.getElementById('rules-log-overlay').classList.add('hidden');
+}
+
+// Load rules on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Existing init code runs automatically
+    // Add rules loading
+    setTimeout(loadRules, 500);
+    // Start sync status polling
+    setTimeout(loadSyncStatus, 500);
+    setInterval(loadSyncStatus, 5000);
+});
+
+// ==================== SYNC PAUSE/RESUME ====================
+
+let syncStatus = { is_paused: false };
+let pauseCountdownInterval = null;
+
+async function loadSyncStatus() {
+    try {
+        const response = await fetch('/api/sync/status');
+        const data = await response.json();
+        syncStatus = data;
+        updatePauseUI(data);
+    } catch (error) {
+        console.error('Failed to load sync status:', error);
+    }
+}
+
+function updatePauseUI(status) {
+    const pauseToggle = document.getElementById('pause-toggle');
+    const pauseIcon = document.getElementById('pause-icon');
+    const pauseBanner = document.getElementById('pause-banner');
+    const pauseSubtitle = document.getElementById('pause-banner-subtitle');
+
+    if (status.is_paused) {
+        pauseToggle.classList.add('paused');
+        pauseIcon.textContent = '▶️';
+        pauseToggle.title = 'Resume iCloud sync';
+        pauseBanner.classList.remove('hidden');
+
+        // Update subtitle with countdown if applicable
+        if (status.resume_in_seconds > 0) {
+            updatePauseCountdown(status.resume_in_seconds);
+        } else {
+            pauseSubtitle.textContent = 'Sync will resume when you click Resume';
+            if (pauseCountdownInterval) {
+                clearInterval(pauseCountdownInterval);
+                pauseCountdownInterval = null;
+            }
+        }
+    } else {
+        pauseToggle.classList.remove('paused');
+        pauseIcon.textContent = '⏸️';
+        pauseToggle.title = 'Pause iCloud sync';
+        pauseBanner.classList.add('hidden');
+
+        if (pauseCountdownInterval) {
+            clearInterval(pauseCountdownInterval);
+            pauseCountdownInterval = null;
+        }
+    }
+}
+
+function updatePauseCountdown(seconds) {
+    const pauseSubtitle = document.getElementById('pause-banner-subtitle');
+
+    function formatDuration(s) {
+        if (s < 60) return `${Math.round(s)} seconds`;
+        const mins = Math.floor(s / 60);
+        if (mins < 60) return `${mins} minute${mins !== 1 ? 's' : ''}`;
+        const hours = Math.floor(mins / 60);
+        const remainMins = mins % 60;
+        return `${hours}h ${remainMins}m`;
+    }
+
+    let remaining = seconds;
+    pauseSubtitle.textContent = `Auto-resume in ${formatDuration(remaining)}`;
+
+    // Clear existing interval
+    if (pauseCountdownInterval) {
+        clearInterval(pauseCountdownInterval);
+    }
+
+    pauseCountdownInterval = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+            clearInterval(pauseCountdownInterval);
+            pauseCountdownInterval = null;
+            loadSyncStatus(); // Refresh to show resumed state
+        } else {
+            pauseSubtitle.textContent = `Auto-resume in ${formatDuration(remaining)}`;
+        }
+    }, 1000);
+}
+
+function toggleSyncPause() {
+    if (syncStatus.is_paused) {
+        resumeSync();
+    } else {
+        showPauseModal();
+    }
+}
+
+function showPauseModal() {
+    document.getElementById('pause-modal-overlay').classList.remove('hidden');
+}
+
+function closePauseModal() {
+    document.getElementById('pause-modal-overlay').classList.add('hidden');
+}
+
+async function pauseSync(minutes) {
+    closePauseModal();
+
+    try {
+        const response = await fetch('/api/sync/pause', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duration_minutes: minutes }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(data.message, 'success');
+            loadSyncStatus();
+        } else {
+            showToast(data.message || 'Failed to pause sync', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to pause sync', 'error');
+    }
+}
+
+async function resumeSync() {
+    try {
+        const response = await fetch('/api/sync/resume', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('iCloud sync resumed', 'success');
+            loadSyncStatus();
+        } else {
+            showToast(data.message || 'Failed to resume sync', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to resume sync', 'error');
+    }
+}
+
+async function extendPause() {
+    const select = document.getElementById('pause-duration-extend');
+    const minutes = parseInt(select.value);
+    select.value = ''; // Reset selection
+
+    if (!minutes) return;
+
+    try {
+        const response = await fetch('/api/sync/extend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes: minutes }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(data.message, 'success');
+            loadSyncStatus();
+        } else {
+            showToast(data.message || 'Failed to extend pause', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to extend pause', 'error');
+    }
+}

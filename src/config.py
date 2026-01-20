@@ -11,6 +11,7 @@ DASHBOARD_URL = f"http://{HOST}:{PORT}"
 PROJECT_ROOT = Path(__file__).parent.parent
 STATIC_DIR = PROJECT_ROOT / "static"
 LOGS_DIR = PROJECT_ROOT / "logs"
+CONFIG_DIR = PROJECT_ROOT / "config"
 
 # CloudDocs database path
 CLOUDDOCS_DB = Path.home() / "Library/Application Support/CloudDocs/session/db/client.db"

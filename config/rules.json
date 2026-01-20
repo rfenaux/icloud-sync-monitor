@@ -1,0 +1,38 @@
+{
+  "rules": [
+    {
+      "id": "default-stuck",
+      "name": "Retry Stuck Downloads",
+      "enabled": true,
+      "conditions": {
+        "stuck_minutes": 30,
+        "file_types": [],
+        "containers": [],
+        "min_size_bytes": 0,
+        "max_size_bytes": 0
+      },
+      "action": "retry_download",
+      "cooldown_minutes": 60,
+      "max_retries": 3,
+      "created_at": "2026-01-20T17:14:35.004356",
+      "updated_at": "2026-01-20T17:14:35.004367"
+    },
+    {
+      "id": "default-large",
+      "name": "Retry Large Files",
+      "enabled": false,
+      "conditions": {
+        "stuck_minutes": 60,
+        "file_types": [],
+        "containers": [],
+        "min_size_bytes": 104857600,
+        "max_size_bytes": 0
+      },
+      "action": "evict_and_retry",
+      "cooldown_minutes": 120,
+      "max_retries": 2,
+      "created_at": "2026-01-20T17:14:35.004374",
+      "updated_at": "2026-01-20T17:14:35.004376"
+    }
+  ]
+}

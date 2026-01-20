@@ -718,6 +718,443 @@ footer {
     font-size: 0.85rem;
 }
 
+/* ==================== SYNC PAUSE/RESUME ==================== */
+
+.pause-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.pause-toggle:hover {
+    background: var(--bg-hover);
+}
+
+.pause-toggle.paused {
+    background: var(--accent-orange);
+    color: white;
+    animation: pausePulse 1.5s infinite;
+}
+
+@keyframes pausePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.pause-banner {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.pause-banner.hidden {
+    display: none;
+}
+
+.pause-banner-icon {
+    font-size: 1.5rem;
+}
+
+.pause-banner-content {
+    flex: 1;
+}
+
+.pause-banner-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.pause-banner-subtitle {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.pause-banner-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pause-duration-select {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.pause-duration-select option {
+    background: var(--card-bg);
+    color: var(--text-color);
+}
+
+.pause-banner-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.pause-banner-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.pause-banner-btn.primary {
+    background: white;
+    color: #d97706;
+}
+
+.pause-banner-btn.primary:hover {
+    background: #fef3c7;
+}
+
+/* Pause Modal */
+.pause-dialog {
+    max-width: 400px;
+    text-align: center;
+}
+
+.pause-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.pause-option {
+    background: var(--bg-color);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.pause-option:hover {
+    border-color: var(--accent-orange);
+    background: var(--bg-hover);
+}
+
+.pause-option-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.pause-option-unit {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* ==================== RULES SECTION ==================== */
+
+.rules-section {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+.section-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn.small {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+.action-btn.primary {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.action-btn.primary:hover {
+    background: #2563eb;
+}
+
+.rules-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--bg-color);
+    border-radius: 8px;
+}
+
+.rules-stat {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.rules-stat span:first-child {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.rules-stat.success-rate span:first-child {
+    color: var(--accent-green);
+}
+
+.rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rule-card {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: border-color 0.2s;
+}
+
+.rule-card:hover {
+    border-color: var(--accent-blue);
+}
+
+.rule-card.disabled {
+    opacity: 0.6;
+}
+
+.rule-toggle {
+    margin-right: 16px;
+}
+
+.rule-toggle input[type="checkbox"] {
+    width: 40px;
+    height: 22px;
+    appearance: none;
+    background: var(--border-color);
+    border-radius: 11px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.rule-toggle input[type="checkbox"]:checked {
+    background: var(--accent-green);
+}
+
+.rule-toggle input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+}
+
+.rule-toggle input[type="checkbox"]:checked::before {
+    transform: translateX(18px);
+}
+
+.rule-info {
+    flex: 1;
+}
+
+.rule-name {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 4px;
+}
+
+.rule-details {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.rule-details span {
+    margin-right: 12px;
+}
+
+.rule-action-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    margin-left: 8px;
+}
+
+.rule-action-badge.retry_download { background: #dbeafe; color: #2563eb; }
+.rule-action-badge.evict_and_retry { background: #fef3c7; color: #d97706; }
+.rule-action-badge.notify { background: #e0e7ff; color: #6366f1; }
+.rule-action-badge.ignore { background: #f3f4f6; color: #6b7280; }
+
+.rule-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.rule-btn {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    background: var(--border-color);
+    color: var(--text-color);
+    transition: background 0.2s;
+}
+
+.rule-btn:hover {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.rule-btn.danger:hover {
+    background: var(--accent-red);
+}
+
+/* Rule Modal */
+.rule-dialog {
+    max-width: 500px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Rules Log Modal */
+.rules-log-dialog {
+    max-width: 600px;
+    max-height: 80vh;
+}
+
+.rules-log-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-entry {
+    display: flex;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-time {
+    width: 80px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.log-content {
+    flex: 1;
+}
+
+.log-file {
+    color: var(--text-color);
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.log-rule {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.log-status {
+    width: 80px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.log-status.success { color: var(--accent-green); }
+.log-status.failed { color: var(--accent-red); }
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 600px) {

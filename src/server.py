@@ -25,9 +25,11 @@ from urllib.parse import parse_qs, urlparse
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import HOST, PORT, STATIC_DIR, LOGS_DIR, DASHBOARD_URL, WS_PUSH_INTERVAL
+from src.config import HOST, PORT, STATIC_DIR, LOGS_DIR, DASHBOARD_URL, WS_PUSH_INTERVAL, CONFIG_DIR
 from src.collectors.sqlite_reader import SQLiteReader
 from src.collectors.brctl_runner import BrctlRunner
+from src.rules import RulesEngine, RuleAction
+from src.sync_control import SyncController
 
 # Configure logging
 logging.basicConfig(
@@ -46,6 +48,43 @@ brctl_runner = BrctlRunner()
 connected_websockets: set = set()
 cached_data: dict = {}
 last_quota_fetch: Optional[datetime] = None
+
+# Rules engine
+rules_engine = RulesEngine(CONFIG_DIR)
+
+# Sync controller
+sync_controller = SyncController(CONFIG_DIR)
+
+
+def _register_rule_actions():
+    """Register action handlers for the rules engine."""
+    def retry_download(file_path: str) -> tuple[bool, str]:
+        return brctl_runner.force_download(file_path)
+
+    def evict_and_retry(file_path: str) -> tuple[bool, str]:
+        # First evict
+        success, msg = brctl_runner.evict_file(file_path)
+        if not success:
+            return False, f"Evict failed: {msg}"
+        # Then re-download
+        return brctl_runner.force_download(file_path)
+
+    def notify(file_path: str) -> tuple[bool, str]:
+        # Just log for now - could integrate with webhooks later
+        logger.warning(f"[NOTIFY] Stuck file detected: {file_path}")
+        return True, "Notification logged"
+
+    def ignore(file_path: str) -> tuple[bool, str]:
+        logger.info(f"[IGNORE] Ignoring stuck file: {file_path}")
+        return True, "File ignored"
+
+    rules_engine.register_action_handler(RuleAction.RETRY_DOWNLOAD, retry_download)
+    rules_engine.register_action_handler(RuleAction.EVICT_AND_RETRY, evict_and_retry)
+    rules_engine.register_action_handler(RuleAction.NOTIFY, notify)
+    rules_engine.register_action_handler(RuleAction.IGNORE, ignore)
+
+
+_register_rule_actions()
 
 
 def fetch_and_cache_quota() -> dict:
@@ -88,6 +127,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self._send_json(self._get_quota())
         elif path == "/api/containers":
             self._send_json(self._get_containers())
+        # Rules API (GET)
+        elif path == "/api/rules":
+            self._send_json({"rules": rules_engine.get_rules(), "stats": rules_engine.get_stats()})
+        elif path.startswith("/api/rules/") and path.endswith("/log"):
+            # Not used - kept for API consistency
+            self._send_json({"log": rules_engine.get_log()})
+        elif path == "/api/rules/log":
+            self._send_json({"log": rules_engine.get_log()})
+        # Sync control API (GET)
+        elif path == "/api/sync/status":
+            self._send_json(sync_controller.get_status())
         elif path == "/health":
             self._send_json({"status": "ok", "timestamp": datetime.now().isoformat()})
         elif path == "/" or path == "/index.html":
@@ -139,8 +189,99 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             success, message = brctl_runner.restart_bird()
             self._send_json({"success": success, "message": message})
 
+        # Rules API (POST/PUT/DELETE)
+        elif path == "/api/rules":
+            # Create new rule
+            result = rules_engine.create_rule(data)
+            self._send_json({"success": True, "rule": result})
+
+        elif path.startswith("/api/rules/") and "/toggle" in path:
+            # Toggle rule enabled state
+            rule_id = path.split("/")[3]
+            result = rules_engine.toggle_rule(rule_id)
+            if result:
+                self._send_json({"success": True, "rule": result})
+            else:
+                self._send_json({"success": False, "message": "Rule not found"}, status=404)
+
+        elif path.startswith("/api/rules/") and "/run" in path:
+            # Manual trigger
+            rule_id = path.split("/")[3]
+            file_path = data.get("path")
+            if not file_path:
+                self._send_json({"success": False, "message": "Path required"}, status=400)
+                return
+            result = rules_engine.run_rule_manually(rule_id, file_path)
+            self._send_json(result)
+
+        elif path == "/api/rules/evaluate":
+            # Evaluate rules against stuck files
+            stuck_files = data.get("files", [])
+            results = rules_engine.evaluate(stuck_files)
+            self._send_json({"success": True, "results": results})
+
+        # Sync control API (POST)
+        elif path == "/api/sync/pause":
+            duration = data.get("duration_minutes")
+            result = sync_controller.pause(duration_minutes=duration)
+            self._send_json(result)
+
+        elif path == "/api/sync/resume":
+            result = sync_controller.resume()
+            self._send_json(result)
+
+        elif path == "/api/sync/extend":
+            minutes = data.get("minutes", 30)
+            result = sync_controller.extend_pause(minutes)
+            self._send_json(result)
+
         else:
             self._send_json({"error": "Not found"}, status=404)
+
+    def do_PUT(self):
+        """Handle PUT requests for updates."""
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode("utf-8") if content_length else "{}"
+        try:
+            data = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            data = {}
+
+        # Update rule
+        if path.startswith("/api/rules/"):
+            parts = path.split("/")
+            if len(parts) >= 4:
+                rule_id = parts[3]
+                result = rules_engine.update_rule(rule_id, data)
+                if result:
+                    self._send_json({"success": True, "rule": result})
+                else:
+                    self._send_json({"success": False, "message": "Rule not found"}, status=404)
+                return
+
+        self._send_json({"error": "Not found"}, status=404)
+
+    def do_DELETE(self):
+        """Handle DELETE requests."""
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        # Delete rule
+        if path.startswith("/api/rules/"):
+            parts = path.split("/")
+            if len(parts) >= 4:
+                rule_id = parts[3]
+                success = rules_engine.delete_rule(rule_id)
+                if success:
+                    self._send_json({"success": True, "message": "Rule deleted"})
+                else:
+                    self._send_json({"success": False, "message": "Rule not found"}, status=404)
+                return
+
+        self._send_json({"error": "Not found"}, status=404)
 
     def _send_json(self, data: dict, status: int = 200):
         """Send JSON response."""
