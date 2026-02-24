@@ -354,6 +354,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 def run_http_server():
     """Run the HTTP server."""
+    HTTPServer.allow_reuse_address = True
     server = HTTPServer((HOST, PORT), DashboardHandler)
     logger.info(f"HTTP server running at {DASHBOARD_URL}")
     server.serve_forever()
